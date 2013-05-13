@@ -50,7 +50,7 @@ def completeMarketsResiduals(z,state,Para):
     res[5*S:6*S] = alpha_1*ul1 + R*mu*( ul1 + ull1*l1 ) +theta_2*R*ull1*phi/theta_1 + n1*theta_1*xi
     res[6*S:7*S] = alpha_2*ul2 - mu*( ul2 + ull2*l2 ) -ull2*phi + n2*theta_2*xi
     I  = uc2*c2+ul2*l2-R*( uc1*c1 + ul1*l1)
-    res[7*S] = P[s_,:].dot(np.linalg.solve(np.eye(S)-(beta*P.T).T,I))
+    res[7*S] = P[s_,:].dot(np.linalg.solve(np.eye(S)-(beta*P.T).T,I))-x
     return res
     
 def completeMarketsSolution(state,Para):
