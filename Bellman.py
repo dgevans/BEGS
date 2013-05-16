@@ -14,6 +14,7 @@ from utilities import DictWrap
 from Spline import Spline
 from utilities import ValueFunctionSpline
 import itertools
+from mpi4py import MPI
 
 class BellmanMap:
     
@@ -180,10 +181,11 @@ def approximateValueFunctionAndPolicies(Vfnew,Para):
     
     return fitNewPolicies(domain,policies,Para),allSolved
     
-def approximateValueFunctionAndPoliciesMPI(Vfnew,Para,comm):
+def approximateValueFunctionAndPoliciesMPI(Vfnew,Para):
     '''
     Approximates the new value function along with associated policie
     '''    
+    comm = MPI.COMM_WORLD
     #first split up domain for each 
     s = comm.Get_size()
     rank = comm.Get_rank()
@@ -191,14 +193,13 @@ def approximateValueFunctionAndPoliciesMPI(Vfnew,Para,comm):
     m = n/s
     r = n%s
     mydomain = Para.domain[rank*m+min(rank,r):(rank+1)*m+min(rank+1,r)]
+
     mypolicies = map(Vfnew,mydomain)
-    chunked_policies = comm.gather(mypolicies,root=0) #gather all the policies at master    
-    if rank == 0:
-        policies = list(itertools.chain.from_iterable(chunked_policies))
-        allSolved = all([policy != None for policy in policies])
-        policyFunctions = fitNewPolicies(Para.domain,policies,Para)
-    else:
-        policyFunctions = []
+    chunked_policies = comm.allgather(mypolicies) #gather all the policies at master 
+    policies = list(itertools.chain.from_iterable(chunked_policies))
+    allSolved = all([policy != None for policy in policies])
+    policyFunctions = fitNewPolicies(Para.domain,policies,Para)
+
     
     return comm.bcast(policyFunctions,root=0),allSolved
     
@@ -213,7 +214,6 @@ def solveBellman(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
         Vs_old.append(Vf[s_](domain))
         
     niter = 100
-    diff_old = 1
     Vf_old = Vf
     for t in range(0,niter):
         
@@ -236,13 +236,13 @@ def solveBellman(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
         #    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
         Vf_old = Vf
         Vf= Vfprime
-        diff_old =diff
     return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
     
-def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para,comm):
+def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
     '''
     Solves the bellman equation using MPI
     '''
+    comm = MPI.COMM_WORLD
     T = BellmanMap(Para)    
     S = Para.P.shape[0]
     Vs_old = []
@@ -251,17 +251,15 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para,comm
         Vs_old.append(Vf[s_](domain))
         
     niter = 100
-    diff_old = 1
-    Vf_old = Vf
     for t in range(0,niter):
         
         Vfnew = T(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy)
-        (Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy), allSolved = approximateValueFunctionAndPolicies(Vfnew,Para)
+        (Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy), allSolved = approximateValueFunctionAndPoliciesMPI(Vfnew,Para)
         
         while not allSolved:
             print "iterating"
             Vfnew = T(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy)
-            (Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy), allSolved = approximateValueFunctionAndPolicies(Vfnew,Para)
+            (Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy), allSolved = approximateValueFunctionAndPoliciesMPI(Vfnew,Para)
 
         
         diff = 0
@@ -269,13 +267,12 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para,comm
             diff = max(diff,np.linalg.norm(Vf[s_](domain)-Vfprime[s_](domain))/len(domain))
             #print domain[np.abs(Vs_old[s_]-Vfprime[s_](domain)).argmax(),:]
             Vs_old[s_] = Vf[s_](domain)
-        print diff
+        if comm.Get_rank() == 0:
+            print diff
         #if diff > 2*diff_old and t >50:
         #    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
-        Vf_old = Vf
         Vf= Vfprime
-        diff_old =diff
-    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
+    return Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy
 
 
 def fitNewPolicies(domain,policies,Para):

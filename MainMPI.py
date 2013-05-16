@@ -11,7 +11,7 @@ import numpy as np
 import Bellman
 from Spline import Spline
 import initialize
-from mpi4py import MPI
+import cPickle
 
 
 Para = BGP_parameters()
@@ -24,20 +24,19 @@ Para.xmax = 2.0
 Para.Rmin = 2.4
 Para.Rmax = 3.7
 Para.approxOrder = [2,2]
-xgrid = np.sort(np.hstack((np.linspace(Para.xmin,Para.xmax,3),[-0.9943])))
-Rgrid = np.sort(np.hstack((np.linspace(Para.Rmin,Para.Rmax,3),[3.0996])))
+xgrid = np.sort(np.hstack((np.linspace(Para.xmin,Para.xmax,10),[-0.9943])))
+Rgrid = np.sort(np.hstack((np.linspace(Para.Rmin,Para.Rmax,10),[3.0996])))
 X = Spline.makeGrid([xgrid,Rgrid])
 domain = np.vstack((X,X))
 domain = zip(domain[:,0],domain[:,1],[0]*len(X)+[1]*len(X))
 
 V0 = lambda state: initialize.completeMarketsSolution(state,Para)
 Para.domain = domain
-(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy),_ = Bellman.approximateValueFunctionAndPolicies(V0,Para)
+(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy),_ = Bellman.approximateValueFunctionAndPoliciesMPI(V0,Para)
 
-comm = MPI.COMM_SELF.Spawn('python',
-                           args=['mpiworker.py'],
-                           maxprocs=2)
-policies = (Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
-comm.bcast(policies,root=MPI.ROOT)
+Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
+
+cPickle.dumps((Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para),'SolvedPolicyRules.dat')
+
 #Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
         
