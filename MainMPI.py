@@ -34,7 +34,7 @@ domain = zip(domain[:,0],domain[:,1],[0]*len(X)+[1]*len(X))
 
 V0 = lambda state: initialize.completeMarketsSolution(state,Para)
 Para.domain = domain
-(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy),_ = Bellman.approximateValueFunctionAndPoliciesMPI(V0,Para)
+
 
 Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
 

@@ -23,6 +23,7 @@ class BellmanMap:
         if isinstance(Para,primitives.BGP_parameters):
             self.Para = deepcopy(Para)
             self.io = inner_opt.BGP
+            self.ioEdge = inner_opt.BGPEdge
         else:
             raise Exception('Para must be an instance of a type of primitive')
         self.U = self.Para.U
@@ -40,6 +41,7 @@ class BellmanMap:
         self.policies = {}
         
         return self.maximizeObjective
+        
         
     def getPolicies(self,c1,c2_,x,R,s_):
         '''
@@ -63,7 +65,28 @@ class BellmanMap:
         
         V = P[s_,:].dot(alpha_1*U(c1,l1)+alpha_2*U(c2,l2)+beta*Vprime)
         return c1,c2,xprime,V
-    
+    def getPoliciesEdge(self,c1,x,R,s_):
+        '''
+        Computes xprime given c1 and c_2 using internal opitmization methods
+        '''
+        U = self.Para.U
+        P = self.Para.P
+        beta= self.Para.beta
+        S = P.shape[0]        
+        
+        alpha_1 = self.Para.alpha_1
+        alpha_2 = self.Para.alpha_2
+        c1,c2,_,_ = self.ioEdge.ComputeC2(c1,R,s_,self.Para)
+        l1,_,l2,_ = self.ioEdge.Computel(c1,0,c2,0,R,self.Para)
+        xprime,_ = self.ioEdge.ComputeXprime(c1,0,c2,0,l1,0,l2,0,x,R,s_,self.Para)
+        
+        Vprime = np.zeros(S)
+        for s in range(0,S):
+            Vprime[s] = self.Vf[s]([xprime[s],R])
+        
+        V = P[s_,:].dot(alpha_1*U(c1,l1)+alpha_2*U(c2,l2)+beta*Vprime)
+        return c1,c2,xprime,V    
+        
     def maximizeObjective(self,state,z_0=None):
         '''
             Maximizes the objective function trying the unconstrained method first
@@ -71,28 +94,50 @@ class BellmanMap:
         '''
         if self.policies.has_key(state):
             return self.policies[state]
-        
-        #first try unconstrained maximization
-        sol = self.maximizeObjectiveUnconstrained(state,z_0)
-        if sol.success:
-            self.policies[state] = sol.policies
-            return sol.policies
-        else:
-            #now solve the constrained maximization
-            #fist solve at guess returned by unconstrained maximization
-            if sol.policies != None:
-                c1,c2,xprime,V = sol.policies
-                ConSol = self.maximizeObjectiveConstrained(state,np.hstack((c1,c2,xprime)))
+        if state[1] != self.Para.Rmin and state[1] != self.Para.Rmax:
+            #first try unconstrained maximization
+            sol = self.maximizeObjectiveUnconstrained(state,z_0)
+            if sol.success:
+                self.policies[state] = sol.policies
+                return sol.policies
+            else:
+                #now solve the constrained maximization
+                #fist solve at guess returned by unconstrained maximization
+                if sol.policies != None:
+                    c1,c2,xprime,V = sol.policies
+                    ConSol = self.maximizeObjectiveConstrained(state,np.hstack((c1,c2,xprime)))
+                    if ConSol.success:
+                        self.policies[state] = ConSol.policies
+                        return ConSol.policies
+                #if maximizing with the result of unconstrained failed try initial guess
+                ConSol = self.maximizeObjectiveConstrained(state,z_0)
                 if ConSol.success:
                     self.policies[state] = ConSol.policies
                     return ConSol.policies
-            #if maximizing with the result of unconstrained failed try initial guess
-            ConSol = self.maximizeObjectiveConstrained(state,z_0)
-            if ConSol.success:
-                self.policies[state] = ConSol.policies
-                return ConSol.policies
-        # if everything failed return None to indicate failer
-        return None
+            # if everything failed return None to indicate failer
+            return None
+        else:
+            #first try unconstrained maximization
+            sol = self.maximizeObjectiveUnconstrainedEdge(state,z_0)
+            if sol.success:
+                self.policies[state] = sol.policies
+                return sol.policies
+            else:
+                #now solve the constrained maximization
+                #fist solve at guess returned by unconstrained maximization
+                if sol.policies != None:
+                    c1,c2,xprime,V = sol.policies
+                    ConSol = self.maximizeObjectiveConstrainedEdge(state,c1)
+                    if ConSol.success:
+                        self.policies[state] = ConSol.policies
+                        return ConSol.policies
+                #if maximizing with the result of unconstrained failed try initial guess
+                ConSol = self.maximizeObjectiveConstrainedEdge(state,z_0)
+                if ConSol.success:
+                    self.policies[state] = ConSol.policies
+                    return ConSol.policies
+            # if everything failed return None to indicate failer
+            return None
         
         
     def maximizeObjectiveUnconstrained(self,state,z_0=None):
@@ -164,6 +209,70 @@ class BellmanMap:
                     acc=1e-12,disp=0,full_output=True)
         
         policies = self.getPolicies(policy[0:S],policy[S:2*S-1],x,R,s_)
+        if imode == 0:
+            return DictWrap({'policies':policies,'success':True})
+        print smode
+        return DictWrap({'policies':policies,'success':False})
+        
+    def maximizeObjectiveUnconstrainedEdge(self,state,z_0=None):
+        '''
+        Maximize the objective function.  First try FOC conditions then do constrained
+        maximization
+        '''
+        x = state[0]
+        R = state[1]
+        s_ = state[2]
+        #fist let's try to solve it by solving the unconstrained FOC
+        #get initial guess
+        S = self.Para.P.shape[0]
+        z0 = np.zeros(S)        
+        if z_0 == None:
+            for s in range(0,S):
+                z0[s] = self.c1_policy[(s_,s)]([x,R])
+        else:
+            z0 = z_0[0:S]
+        sol = root(self.ioEdge.GradObjectiveUncon,z0,(x,R,s_,self.Vf,self.Para),tol=1e-12)
+        PR = sol.x
+        if sol.success:
+            c1 = PR[0:S]
+            c1,c2,xprime,V = self.getPoliciesEdge(c1,x,R,s_)
+            #now check if 
+            if np.all(xprime<=self.Para.xmax) and np.all(xprime>=self.Para.xmin):
+                #compute objective from c1,c2,xprime
+                return DictWrap({'policies':(c1,c2,xprime,V),'success':True})
+            else:
+                return DictWrap({'policies':(c1,c2,xprime,V),'success':False})
+        return DictWrap({'policies':None,'success':False})
+        
+    def maximizeObjectiveConstrainedEdge(self,state,z_0=None):
+        '''
+        Maximize the objective function using constrained optimization
+        '''
+        x = state[0]
+        R = state[1]
+        s_ = state[2]
+        Para = self.Para
+        S  = Para.P.shape[0]
+        z0 = np.zeros(S)
+        #if we don't have an initial guess, take initial guess from policies
+        if z_0 == None:
+            for s in range(0,S):
+                z0[s] = self.c1_policy[(s_,s)]([x,R])
+        else:
+            z0 = z_0[0:S]
+        
+        #create bounds
+        if isinstance(Para,primitives.BGP_parameters):
+            cbounds = zip(np.zeros(S),Para.theta_1+Para.theta_2-Para.g)
+        else:
+            cbounds = [(0,100)]*S
+        bounds = cbounds
+        #perfom minimization
+        policy,minusV,_,imode,smode = fmin_slsqp(self.ioEdge.ConstrainedObjective,z0,f_ieqcons=self.ioEdge.ieq_cons,bounds=bounds,
+                   fprime_ieqcons=self.ioEdge.ieq_consJacobian,args=(x,R,s_,self.Vf,Para),iter=1000,
+                    acc=1e-12,disp=0,full_output=True)
+        
+        policies = self.getPoliciesEdge(policy[0:S],x,R,s_)
         if imode == 0:
             return DictWrap({'policies':policies,'success':True})
         print smode

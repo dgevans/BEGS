@@ -1,2 +1,3 @@
 #
 import BGP
+import BGPEdge
