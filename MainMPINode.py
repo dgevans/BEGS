@@ -4,29 +4,25 @@ Created on Sat May  4 19:33:24 2013
 
 @author: dgevans
 """
-import sys
-sys.path.append('/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages')
 from primitives import BGP_parameters
 import numpy as np
-import Bellman
 from Spline import Spline
-import initialize
 from mpi4py import MPI
 
-
 Para = BGP_parameters()
-Para.theta_1 = np.array([3.2501,3.3499])
-Para.theta_2 = np.array([0.9639 ,1.0361])
-Para.g = .3
-Para.beta = np.array([0.95, 0.85])
+Para.P = np.array([[7.0/11.0, 4.0/11.0],[16.0/19.0,3.0/19.0]])
+Para.psi = 0.6994
+Para.theta_1 = np.array([3.9725,4.1379])
+Para.theta_2 = np.array([0.9642,1.0358])
+Para.g = .4199
+Para.beta = np.array([0.95])
 Para.xmin = -3.0
-Para.xmax = 2.0
-Para.Rmin = 2.4
+Para.xmax = 3.0
+Para.Rmin = 2.7
 Para.Rmax = 3.7
-Para.POLICY_TAG = 5
 Para.approxOrder = [2,2]
-xgrid = np.sort(np.hstack((np.linspace(Para.xmin,Para.xmax,10),[-0.9943])))
-Rgrid = np.sort(np.hstack((np.linspace(Para.Rmin,Para.Rmax,10),[3.0996])))
+xgrid =np.linspace(Para.xmin,Para.xmax,22)
+Rgrid = np.linspace(Para.Rmin,Para.Rmax,22)
 X = Spline.makeGrid([xgrid,Rgrid])
 domain = np.vstack((X,X))
 domain = zip(domain[:,0],domain[:,1],[0]*len(X)+[1]*len(X))
