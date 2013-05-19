@@ -28,8 +28,8 @@ Para.xmax = 3.0
 Para.Rmin = 2.7
 Para.Rmax = 3.7
 Para.approxOrder = [2,2]
-xgrid =np.linspace(Para.xmin,Para.xmax,25)
-Rgrid = np.linspace(Para.Rmin,Para.Rmax,25)
+xgrid =np.linspace(Para.xmin,Para.xmax,10)
+Rgrid = np.linspace(Para.Rmin,Para.Rmax,10)
 X = Spline.makeGrid([xgrid,Rgrid])
 domain = np.vstack((X,X))
 domain = zip(domain[:,0],domain[:,1],[0]*len(X)+[1]*len(X))
@@ -40,7 +40,11 @@ Para.domain = domain
 
 Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
 
-cPickle.dumps((Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para),'SolvedPolicyRules.dat')
+policyFile = open('SolvedPolicyRules.data','w')
+
+cPickle.dump((Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para),policyFile)
+
+policyFile.close()
 
 #Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
         
