@@ -12,7 +12,9 @@ import Bellman
 from Spline import Spline
 import initialize
 import cPickle
+from mpi4py import MPI
 
+print MPI.COMM_WORLD.Get_rank()
 
 Para = BGP_parameters()
 Para.P = np.array([[7.0/11.0, 4.0/11.0],[16.0/19.0,3.0/19.0]])

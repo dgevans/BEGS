@@ -5,8 +5,7 @@ Created on Sat May  4 16:23:13 2013
 @author: dgevans
 """
 
-import numpy as np
-import numexpr  as ne   
+import numpy as np  
 
 def ComputeC2(c1,c2_,R,s_,Para):
     '''
