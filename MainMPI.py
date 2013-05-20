@@ -14,8 +14,8 @@ import initialize
 import cPickle
 from mpi4py import MPI
 
-print MPI.COMM_WORLD.Get_rank()
-
+rank =  MPI.COMM_WORLD.Get_rank()
+print rank
 Para = BGP_parameters()
 Para.P = np.array([[7.0/11.0, 4.0/11.0],[3.0/19.0,16.0/19.0]])
 Para.psi = 0.6994
@@ -40,11 +40,12 @@ Para.domain = domain
 
 Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
 
-policyFile = open('SolvedPolicyRules.data','w')
-
-cPickle.dump((Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para),policyFile)
-
-policyFile.close()
+if rank == 0:
+    policyFile = open('SolvedPolicyRules.data','w')
+    
+    cPickle.dump((Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para),policyFile)
+    
+    policyFile.close()
 
 #Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy = Bellman.solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para)
         
