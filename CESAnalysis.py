@@ -1,0 +1,92 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jul 18 09:33:25 2013
+
+@author: dgevans
+"""
+from numpy import *
+from scipy.optimize import root
+
+class parameters(object):
+    
+    alpha_1 = 0.69
+
+    alpha_2 = 0.31    
+    
+    sigma = 2.
+    
+    gamma = 3.
+    
+    theta_1 = array([3.3,3.])
+    
+    theta_2 = array([1.1,1.])
+    
+    g = .35
+    
+    P = array([0.5,0.5])
+    
+    
+Para= parameters()
+
+
+
+def get_c1(tau,R,Para):
+    '''
+    computes c1
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    g = Para.g
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    def c1res(c1):
+        return (theta_1*( (1-tau)*theta_1 )**(1./gamma) + theta_2*( (1-tau)*R*theta_2)**(1./gamma))*c1**(-sigma/gamma) -g - (1+R**(-1./sigma))*c1
+    
+    sol = root(c1res,5*ones(2))
+    if not sol.success:
+        raise Exception(sol.message)
+    else:
+        return sol.x
+        
+def getQuantities(tau,R,Para):
+    '''
+    Computes c1,c2,l1,l2 from tau and R
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    c1 = get_c1(tau,R,Para)
+    c2 = R**(-1./sigma)*c1
+    l1 = ((1-tau)*theta_1)**(1./gamma)*c1**(-sigma/gamma)
+    l2 = ((1-tau)*theta_2)**(1./gamma)*c2**(-sigma/gamma)
+    return c1,c2,l1,l2
+    
+    
+def getI(tau,R,Para):
+    '''
+    Computes I as a function f tau and R
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    return c2**(1-sigma)-l2**(1+gamma) - R*(c1**(1-sigma)-l1**(1+gamma))
+    
+def getUc1(tau,R,Para):
+    '''
+    Computes I as a function f tau and R
+    '''
+    sigma = Para.sigma
+    c1,_,_,_ = getQuantities(tau,R,Para)
+    return c1**(-sigma)
+    
+    
+def getU(tau,R,Para):
+    '''
+    Computes U as a function of tau and R
+    '''
+    
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    return Para.alpha_2*(c2**(1-sigma)/(1-sigma)-l2**(1+gamma)/(1+gamma)) + Para.alpha_2*(c1**(1-sigma)/(1-sigma)-l1**(1+gamma)/(1+gamma))
