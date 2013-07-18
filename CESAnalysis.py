@@ -48,6 +48,66 @@ def get_c1(tau,R,Para):
     else:
         return sol.x
         
+def dc1_dtau(tau,R,Para,c1=None):
+    '''
+    Computes derivative of c1 with respect to tau
+    '''
+    if c1==None:
+        c1 = get_c1(tau,R,Para)
+    gamma = Para.gamma
+    sigma = Para.sigma
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    num = (theta_1**2*((1-tau)*theta_1)**(1./gamma-1)+theta_2**2*((1-tau)*theta_2)**(1./gamma-1)*R**(1./gamma))*c1**(-sigma/gamma)/gamma
+    den = 1+R**(-1./sigma)+sigma*(theta_1*((1-tau)*theta_1)**(1./gamma)+theta_2*((1-tau)*theta_2)**(1./gamma)*R**(1./gamma))*c1**(-sigma/gamma-1)/gamma
+    return -num/den
+    
+    
+def dc1_dR(tau,R,Para,c1=None):
+    '''
+    Computes derivative of c1 with respect to R
+    '''
+    if c1==None:
+        c1 = get_c1(tau,R,Para)
+    gamma = Para.gamma
+    sigma = Para.sigma
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    num = (theta_2*((1-tau)*theta_2)**(1./gamma)*R**(1./gamma-1))*c1**(-sigma/gamma)/gamma + R**(-1./sigma-1)*c1/sigma
+    den = 1+R**(-1./sigma)+sigma*(theta_1*((1-tau)*theta_1)**(1./gamma)+theta_2*((1-tau)*theta_2)**(1./gamma)*R**(1./gamma))*c1**(-sigma/gamma-1)/gamma
+    return num/den
+    
+def Dtau(tau,R,Para):
+    '''
+    Computes the derivatives of quantities with respect to tau
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    c1 = get_c1(tau,R,Para)
+    dc1 = dc1_dtau(tau,R,Para,c1)
+    dc2 = R**(-1./sigma)*dc1
+    dl1 = -(theta_1/gamma)*((1-tau)*theta_1)**(1./gamma-1)*c1**(-sigma/gamma) - (sigma/gamma)*((1-tau)*theta_1)**(1./gamma)*c1**(-sigma/gamma-1)*dc1
+    dl2 = (theta_2*R/theta_1)**(1/gamma)*dl1
+    return dc1,dc2,dl1,dl2
+    
+def DR(tau,R,Para):
+    '''
+    Computes the derivatives of quantities with respect to tau
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    theta_1 = Para.theta_1
+    theta_2 = Para.theta_2
+    c1 = get_c1(tau,R,Para)
+    c2 = R**(-1./sigma)*c1
+    dc1 = dc1_dR(tau,R,Para,c1)
+    dc2 = R**(-1./sigma)*dc1 - R**(-1./sigma-1)*c1/sigma
+    dl1 = - (sigma/gamma)*((1-tau)*theta_1)**(1./gamma)*c1**(-sigma/gamma-1)*dc1
+    dl2 = - (sigma/gamma)*((1-tau)*theta_2)**(1./gamma)*c2**(-sigma/gamma-1)*dc2
+    return dc1,dc2,dl1,dl2
+
 def getQuantities(tau,R,Para):
     '''
     Computes c1,c2,l1,l2 from tau and R
@@ -72,6 +132,26 @@ def getI(tau,R,Para):
     c1,c2,l1,l2 = getQuantities(tau,R,Para)
     return c2**(1-sigma)-l2**(1+gamma) - R*(c1**(1-sigma)-l1**(1+gamma))
     
+def dIdtau(tau,R,Para):
+    '''
+    Computes I as a function f tau and R
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    dc1,dc2,dl1,dl2 = Dtau(tau,R,Para)
+    return (1-sigma)*c2**(-sigma)*dc2-(1+gamma)*(l2**gamma)*dl2 - R*((1-sigma)*c1**(-sigma)*dc1-(1+gamma)*(l1**gamma)*dl1)
+
+def dIdR(tau,R,Para):
+    '''
+    Computes I as a function f tau and R
+    '''
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    dc1,dc2,dl1,dl2 = DR(tau,R,Para)
+    return (1-sigma)*c2**(-sigma)*dc2-(1+gamma)*(l2**gamma)*dl2 - R*((1-sigma)*c1**(-sigma)*dc1-(1+gamma)*(l1**gamma)*dl1)-(c1**(1-sigma)-l1**(1+gamma))
+    
 def getUc1(tau,R,Para):
     '''
     Computes I as a function f tau and R
@@ -90,3 +170,26 @@ def getU(tau,R,Para):
     sigma = Para.sigma
     c1,c2,l1,l2 = getQuantities(tau,R,Para)
     return Para.alpha_2*(c2**(1-sigma)/(1-sigma)-l2**(1+gamma)/(1+gamma)) + Para.alpha_2*(c1**(1-sigma)/(1-sigma)-l1**(1+gamma)/(1+gamma))
+    
+    
+def dUdtau(tau,R,Para):
+    '''
+    Computes U as a function of tau and R
+    '''
+    
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    dc1,dc2,dl1,dl2 = Dtau(tau,R,Para)
+    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_2*(c1**(-sigma)*dc1-l1**gamma*dl1)
+    
+def dUdR(tau,R,Para):
+    '''
+    Computes U as a function of tau and R
+    '''
+    
+    gamma = Para.gamma
+    sigma = Para.sigma
+    c1,c2,l1,l2 = getQuantities(tau,R,Para)
+    dc1,dc2,dl1,dl2 = DR(tau,R,Para)
+    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_2*(c1**(-sigma)*dc1-l1**gamma*dl1)
