@@ -15,6 +15,7 @@ from Spline import Spline
 from utilities import ValueFunctionSpline
 import itertools
 from mpi4py import MPI
+import sys
 
 class BellmanMap:
     
@@ -378,6 +379,7 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
             Vs_old[s_] = Vf[s_](domain)
         if comm.Get_rank() == 0:
             print diff
+            sys.stdout.flush()
         #if diff > 2*diff_old and t >50:
         #    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
         Vf= Vfprime

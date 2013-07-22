@@ -6,6 +6,7 @@ Created on Sat May  4 16:23:13 2013
 """
 
 import numpy as np  
+from scipy import weave
 
 def ComputeC2(c1,c2_,R,s_,Para):
     '''
@@ -148,8 +149,7 @@ def ComputeXprime(c1,gradc1,c2,gradc2,Rprime,gradRprime,l1,gradl1,l2,gradl2,x,s_
     gradxprime = ((x*ucc2/(Euc2)-uc2-ucc2*c2)*gradc2-x*uc2/(Euc2**2)*gradEuc2+Rprime*(uc1+ucc1*c1)*gradc1-(ul2+ull2*l2)*gradl2+Rprime*(ul1+ull1*l1)*gradl1+(uc1*c1+ul1*l1)*gradRprime)/beta
     
     return xprime,gradxprime
-    
-    
+
 def GradObjectiveUncon(z,x,R,s_,Vf,Para):
     '''
     Computes the gradient of the unconstrained objective function with respect to z
