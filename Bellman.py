@@ -360,7 +360,7 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
     for s_ in range(0,S):
         Vs_old.append(Vf[s_](domain))
         
-    niter = 100
+    niter = 1000
     for t in range(0,niter):
         
         Vfnew = T(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy)
@@ -383,6 +383,8 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
         #if diff > 2*diff_old and t >50:
         #    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
         Vf= Vfprime
+        if diff < 1e-8:
+            break
     return Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy
 
 
