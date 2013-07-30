@@ -403,7 +403,7 @@ def linearization(Para,x0,rho0):
         return (Dv.dot(Dyz)).flatten()-Aflat
     diff = 1
     A = 0
-    for i in range(0,100):
+    for i in range(0,5000):
         A0 = random.randn(len(ybar)**2)
         res = root(MatrixEquation,A0)
         if res.success:
@@ -415,7 +415,7 @@ def linearization(Para,x0,rho0):
     Dyz = linalg.solve(M,-DyF)
 
     H = (DzF +(DvF.dot(kron(eye(2),Dv)).dot(kron(eye(2),Dyz)).dot(Phi)))#Constructs the bordered Hessian
-    return Dyz,H,DzF,DyF,DvF,Dv
+    return Dyz,H,DzF,DyF,DvF,Dv,MatrixEquation
     
 def Check2ndOrder(Para,x0,rho0):
     '''
@@ -449,6 +449,130 @@ def getPhi(N,Nz):
         Phi_1[i,base+i*S+1] = 1
         Phi_1[(N-1)+i,base+(N-1)*S+i*S+1] = 1
     return vstack((Phi_0,Phi_1))
+    
+def CMResiduals(z,x_i,rho_i,Para):
+    '''
+    Computest the complete market solution for the iid case
+    '''
+    theta_1 = Para.theta[0,:]
+    theta_i = Para.theta[1:,:]
+    alpha_1 = Para.alpha[0]
+    alpha_i = Para.alpha[1:].reshape((-1,1))
+    n_1 = Para.n[0]
+    n_i = Para.n[1:].reshape((-1,1))
+    beta = Para.beta
+    g = Para.g
+    P = Para.P[0,:]
+    
+    c1,ci,l1,li,mu_i,xi,phi_i,eta_i = getCMQuantities(z,Para)
+    
+    uc1 = Para.Uc(c1)
+    ucc1 = Para.Ucc(c1)
+    uci = Para.Uc(ci)
+    ucci = Para.Ucc(ci)
+    ul1 = Para.Ul(l1)
+    ull1 = Para.Ull(l1)
+    uli = Para.Ul(li)
+    ulli = Para.Ull(li)
+     
+    res = array([])
+    con = x_i - ((uci*ci+uli*li)-rho_i*(uc1*c1+ul1*l1)).dot(P).reshape((-1,1))/(1.-beta)
+    res = hstack((res,con.flatten()))
+    
+    con = rho_i*ul1/theta_1-uli/theta_i
+    res = hstack((res,con.flatten()))
+    
+    con = n_1*theta_1*l1 + sum(n_i*theta_i*li,axis=0)-g-n_1*c1-sum(n_i*ci,0)
+    res = hstack((res,con.flatten()))
+    
+    con = rho_i*uc1-uci
+    res = hstack((res,con.flatten()))
+    
+    foc = alpha_i*uci-mu_i*( ucci*ci+uci )-n_i*xi-eta_i*ucci
+    res = hstack((res,foc.flatten()))
+    
+    foc = alpha_1*uc1+sum(mu_i*rho_i,0)*( ucc1*c1+uc1 )-n_1*xi + sum(eta_i*rho_i,0)*ucc1
+    res = hstack((res,foc.flatten()))
+    
+    foc = alpha_i*uli - mu_i*( ulli*li+uli ) - phi_i*ulli/theta_i + n_i*theta_i*xi
+    res = hstack((res,foc.flatten()))
+    
+    foc = alpha_1*ul1 + sum(mu_i*rho_i,0)*( ull1*l1 + ul1 ) + sum(phi_i*rho_i,0)*ull1/theta_1 + n_1*theta_1*xi
+    res = hstack((res,foc.flatten()))
+    
+    return res
 
+def getCMQuantities(z,Para):
+    '''
+    Gets quantities from z
+    '''
+    N = len(Para.theta)
+    S = len(Para.P)
+    c1 = z[0:S]
+    
+    ci = z[S:N*S].reshape((N-1,S))
+    
+    l1 = z[N*S:(N+1)*S]
+    
+    li = z[(N+1)*S:2*N*S].reshape((N-1,S))
+    
+    zi = 2*N*S
+    
+    mu_i = z[zi:zi+(N-1)].reshape((N-1,1))
+    zi += (N-1)
+
+    xi = z[zi:zi+S].reshape(S)
+    zi += S    
+    
+    phi_i = z[zi:zi+S*(N-1)].reshape((N-1,S))
+    zi += S*(N-1)
+    
+    eta_i = z[zi:zi+S*(N-1)].reshape((N-1,S))
+    zi += S*(N-1)
+    
+    return c1,ci,l1,li,mu_i,xi,phi_i,eta_i
+    
+def SSz_to_CMz(z,Para):
+    '''
+    Transforms SS z to CM z
+    '''
+    N = len(Para.theta)
+    S = len(Para.P)
+    c1 = z[0:S]
+    
+    ci = z[S:N*S].reshape((N-1,S))
+    
+    l1 = z[N*S:(N+1)*S]
+    
+    li = z[(N+1)*S:2*N*S].reshape((N-1,S))
+    
+    zi = 2*N*S
+    x_i = z[zi:zi+N-1].reshape((N-1,1))
+    zi+= N-1
+    
+    rho_i = z[zi:zi+N-1].reshape((N-1,1))
+    zi += N-1
+    
+    mu_i = z[zi:zi+N-1].reshape((N-1,1))
+    zi += N-1
+    
+    lambda_i = z[zi:zi+N-1].reshape((N-1,1))
+    zi += N-1
+    
+    mult = z[zi:]
+    
+    return hstack((c1,ci.flatten(),l1,li.flatten(),mu_i.flatten(),mult)),x_i,rho_i
+    
+def VCM(y,CMzbar):
+    N = len(Para.theta)
+    x = y[0:N-1].reshape((-1,1))
+    rho = y[N-1:].reshape((-1,1))
+    CMz = root(lambda z: CMResiduals(z,x,rho,Para),CMzbar).x
+    c1,ci,l1,li,mu_i,xi,phi_i,eta_i = getCMQuantities(CMz,Para)
+    P = Para.P[0,:]
+    alpha_1 = Para.alpha[0]
+    alpha_i = Para.alpha[1:]
+    U = alpha_1*Para.U(c1,l1)+alpha_i.dot(Para.U(ci,li))
+    return P.dot(U)/(1-Para.beta)
 
     
