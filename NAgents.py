@@ -7,7 +7,11 @@ Created on Sat Jul 20 17:43:46 2013
 from numpy import *
 from copy import deepcopy
 from scipy.optimize import root
-import pycppad as ad
+from primitives import BGP_parameters,CES_parameters 
+Para = BGP_parameters()
+#Para = CES_parameters()
+
+#import pycppad as ad
 import pdb
 import numdifftools as nd
 
@@ -171,6 +175,7 @@ def FOCResiduals(z,x_i,rho_i,V_x,V_rho,Para):
     '''
     Compute the residuals of the first order 
     '''
+    
     N = len(Para.theta)
     theta_1 = Para.theta[0,:]
     theta_i = Para.theta[1:,:]
@@ -198,7 +203,7 @@ def FOCResiduals(z,x_i,rho_i,V_x,V_rho,Para):
     res = alpha_1*uc1 + sum(rhoprime*mu_i,0)*(ucc1*c1+uc1) - n_1*xi + sum(eta_i*rhoprime,0)*ucc1
     res = res.flatten()
     
-    foc = alpha_i*uci -mu_i*( ucci*ci+uci ) + x_i*ucci/Euci*( mu_i-Emu_uci/Euci )\
+    foc = alpha_i*uci-mu_i*( ucci*ci+uci ) + x_i*ucci/Euci*( mu_i-Emu_uci/Euci )\
     +lambda_i*ucci*(rhoprime-rho_i)-n_i*xi-eta_i*ucci
     res = hstack((res,foc.flatten()))
 
@@ -396,27 +401,80 @@ def linearization(Para,x0,rho0):
         pdb.set_trace()
         return Phi.dot(Dyz_flat.reshape((len(zbar),len(ybar)))).flatten()-Bflat
     '''    
+    
+    def Iterate(A):
+        M = DzF+DvF.dot(kron(eye(2),A.reshape((len(ybar),len(ybar))))).dot(Phi)
+        Dyz = linalg.solve(M,-DyF)        
+        ANew=(Dv.dot(Dyz))
+        return ANew
+        
     def MatrixEquation(Aflat):
         A = Aflat.reshape((len(ybar),len(ybar)))
         M = DzF+DvF.dot(kron(eye(2),A)).dot(Phi)
         Dyz = linalg.solve(M,-DyF)
-        return (Dv.dot(Dyz)).flatten()-Aflat
-    diff = 1
+        res=((Dv.dot(Dyz)).flatten()-Aflat)
+        return res
+        
+    diff = 1    
     A = 0
-    for i in range(0,5000):
-        A0 = random.randn(len(ybar)**2)
-        res = root(MatrixEquation,A0)
+    A = random.randn(len(ybar),len(ybar))*.01
+    res = root(MatrixEquation,A.flatten())
+    A=res.x.reshape(len(ybar),len(ybar))
+        
+    
+
+
+    for i in range(0,200):
+        #A0 = random.randn(len(ybar),len(ybar))*.01
+        A0=(random.randn(len(ybar),len(ybar))*.1)
+        A0=-abs(A0+A0.T)
+        A0flat=A0.flatten()
+        res = root(MatrixEquation,A0flat)
+        A=res.x
+        A=A.reshape(len(ybar),len(ybar))
+
+        
+    
+        #res = root(MatrixEquation,A.flatten())
         if res.success:
             if max(abs(MatrixEquation(res.x))) < diff:
-                A = res.x
-                diff = max(abs(MatrixEquation(res.x)))
-                print diff    
+                 M = DzF+DvF.dot(kron(eye(2),A.reshape((len(ybar),len(ybar))))).dot(Phi)
+                 Dyz = linalg.solve(M,-DyF)
+                 if sum(Dyz[N*S*2,0:2])>1e-10:
+                    A = res.x
+                    diff = max(abs(MatrixEquation(res.x)))
+                    print i
+                    print diff    
+                    if N==3:
+                    
+                        XR=Dyz[N*S*2:N*S*2+(2*N-2)*S,:]
+                        x1_1=XR[0,:]
+                        x1_2=XR[1,:]
+                        x2_1=XR[2,:]
+                        x2_2=XR[3,:]
+                        R1_1=XR[4,:]
+                        R1_2=XR[5,:]
+                        R2_1=XR[6,:]
+                        R2_2=XR[7,:]
+                        B_1=array([x1_1,x2_1,R1_1,R2_1])
+                        B_2=array([x1_2,x2_2,R1_2,R2_2])
+                        B=Para.P[1,0]*B_1+Para.P[1,1]*B_2                        
+                        print linalg.eigvals(B)
+
+
+
+                #A0=A.reshape(len(ybar),len(ybar))
     M = DzF+DvF.dot(kron(eye(2),A.reshape((len(ybar),len(ybar))))).dot(Phi)
     Dyz = linalg.solve(M,-DyF)
-
-    H = (DzF +(DvF.dot(kron(eye(2),Dv)).dot(kron(eye(2),Dyz)).dot(Phi)))#Constructs the bordered Hessian
-    return Dyz,H,DzF,DyF,DvF,Dv,MatrixEquation
     
+    H = (DzF +(DvF.dot(kron(eye(2),Dv)).dot(kron(eye(2),Dyz)).dot(Phi)))#Constructs the bordered Hessian
+    A=A.reshape(len(ybar),len(ybar))    
+        
+        
+    return Dyz,H,DzF,DyF,DvF,Dv,MatrixEquation
+     
+     
+     
 def Check2ndOrder(Para,x0,rho0):
     '''
     Check the Bordered Hessian 2nd order conition
@@ -575,4 +633,30 @@ def VCM(y,CMzbar):
     U = alpha_1*Para.U(c1,l1)+alpha_i.dot(Para.U(ci,li))
     return P.dot(U)/(1-Para.beta)
 
-    
+
+Dyz,H,DzF,DyF,DvF,Dv,MatrixEquation=linearization(Para,0,3)
+
+N = len(Para.theta)
+S = len(Para.P)
+
+XR=Dyz[N*S*2:N*S*2+(2*N-2)*S,:]
+x1_1=XR[0,:]
+x1_2=XR[1,:]
+x2_1=XR[2,:]
+x2_2=XR[3,:]
+R1_1=XR[4,:]
+R1_2=XR[5,:]
+R2_1=XR[6,:]
+R2_2=XR[7,:]
+
+B_1=array([x1_1,x2_1,R1_1,R2_1])
+B_2=array([x1_2,x2_2,R1_2,R2_2])
+
+
+#B_1=array([x1_1,R1_1])
+#B_2=array([x1_2,R1_2])
+
+B=.5*(B_1+B_2)
+
+print linalg.eigvals(B)
+

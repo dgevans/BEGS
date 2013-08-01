@@ -10,29 +10,36 @@ import numpy as np
 class parameters(object):
     
     beta = 0.9
-
+    
     alpha_1 = 0.69
     
-    alpha_2 = 0.31
+    alpha_2 = 0.15
+    alpha_3=0.15
+    alpha=np.array([alpha_1,2*alpha_2]);
+    alpha=np.array([alpha_1,alpha_2,alpha_3]);
     
-    n1 = 1.0
+    n1 = 1.0    
+    n2 = 0.5
+    n3=0.5
+    n=np.array([n1,2*n2])
+    n=np.array([n1,n2,n3])
     
-    n2 = 1.0
-
-    theta_1 = 3.3
-    
-    theta_2 = 1.0
-    
-    g = np.array([0.3194,0.3775])
+    theta_1 = 4
+    theta_2 = .5
+    theta_3=  .5
+   
+    theta=np.array([[theta_1, theta_1],[2*theta_2,2*theta_2]])
+    theta=np.array([[theta_1, theta_1*1.03],[theta_2,theta_2*1.03],[theta_3,theta_3*1.03]])   
+    g = np.array([0.3, 0.3])
     
     P = np.ones((2,2))/2.0
     
     
 class CES_parameters(parameters):
     
-    sigma = 2.0
+    sigma = 1.0
     
-    gamma = 2.0
+    gamma = 1.0
     
     def U(self,c,l):
         if self.sigma == 1:
