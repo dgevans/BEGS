@@ -10,6 +10,16 @@ from scipy.optimize import root
 import pycppad as ad
 import pdb
 import numdifftools as nd
+import primitives
+
+Para2 = primitives.CES_parameters()
+Para3 = primitives.CES_parameters()
+Para2.theta = array([[3.3,3.],[1.1,1.]])
+Para3.theta = array([[3.3,3.],[1.1,1.],[1.1,1.]])
+Para2.alpha = array([1.,2.])/3.
+Para3.alpha = ones(3)
+Para2.n = array([1.,2.])
+Para3.n = ones(3)
 
 def SSresiduals(z,Para):
     '''
@@ -327,12 +337,10 @@ def SSz_to_FOCz(SSz,Para):
     
     return hstack((q,xprime.flatten(),rhoprime.flatten(),mu_i.flatten(),mult))
     
-    
-def linearization(Para,x0,rho0):
+def getPartialDerivativesFOC(Para,x0,rho0):
     '''
-    Finds and computes the linearization around the steady state
-    '''
-    
+    Compute the partial derivatives of the FOC map and Envelope conditions
+    '''    
     N = len(Para.theta)
     S = len(Para.P)
     
@@ -378,6 +386,203 @@ def linearization(Para,x0,rho0):
     DyF = nd.Jacobian(lambda y: F(zbar,y,vbar))(ybar)
     DvF = nd.Jacobian(lambda v: F(zbar,ybar,v))(vbar)
     Dv = nd.Jacobian(v_fun)(zbar)
+    
+    return DzF,DyF,DvF,Dv,Phi
+    
+def getPartialDerivativesFOC_ad(Para,x0,rho0):
+    '''
+    Compute the partial derivatives of the FOC map and Envelope conditions
+    '''    
+    N = len(Para.theta)
+    S = len(Para.P)
+    
+    assert S==2    
+    
+    SSz = findSteadyState(Para,x0,rho0)
+    _,_,_,_,x_i,rho_i,_,_,_,_,_ = getSSQuantities(SSz,Para)
+    zbar = SSz_to_FOCz(SSz,Para)
+    ybar = hstack((x_i.flatten(),rho_i.flatten()))
+    V_x,V_rho = envelopeCondition(zbar,Para)
+    vbar = tile(hstack((V_x.flatten(),V_rho.flatten())),2)
+    Phi = getPhi(N,len(zbar))
+    
+    #define functions to use when taking derivatives
+    def v_fun(z):
+        V_x,V_rho = envelopeCondition(z,Para)
+        return hstack((V_x.flatten(),V_rho.flatten()))
+    def F(u):
+        z = u[0:len(zbar)]
+        y = u[len(zbar):len(zbar)+len(ybar)]
+        v = u[len(zbar)+len(ybar):]
+        x_i = y[0:N-1].reshape((N-1,1))
+        rho_i = y[N-1:2*(N-1)].T.reshape((N-1,1))
+        V_x = vstack((v[0:N-1],v[2*(N-1):3*(N-1)])).T
+        V_rho = vstack((v[N-1:2*(N-1)],v[3*(N-1):4*(N-1)])).T
+        return FOCResiduals(z,x_i,rho_i,V_x,V_rho,Para)
+    ubar = hstack((zbar,ybar,vbar))
+    a_u = ad.independent(ubar)
+    a_F = F(a_u)
+    adF = ad.adfun(a_u,a_F)
+    
+    DF = adF.jacobian(ubar)
+    
+    F_z = DF[:,:len(zbar)]
+    F_y = DF[:,len(zbar):len(zbar)+len(ybar)]
+    F_v = DF[:,len(zbar)+len(ybar):]
+    
+    a_z = ad.independent(zbar)
+    a_v = v_fun(a_z)
+    v_z = ad.adfun(a_z,a_v).jacobian(zbar)
+    return F_z,F_y,F_v,v_z,Phi
+    
+def get2ndOrderPartialDerivativesFOC_ad(Para,x0,rho0):
+    '''
+    Compute the partial derivatives of the FOC map and Envelope conditions
+    '''    
+    N = len(Para.theta)
+    S = len(Para.P)
+    
+    assert S==2    
+    
+    SSz = findSteadyState(Para,x0,rho0)
+    _,_,_,_,x_i,rho_i,_,_,_,_,_ = getSSQuantities(SSz,Para)
+    zbar = SSz_to_FOCz(SSz,Para)
+    ybar = hstack((x_i.flatten(),rho_i.flatten()))
+    V_x,V_rho = envelopeCondition(zbar,Para)
+    vbar = tile(hstack((V_x.flatten(),V_rho.flatten())),2)
+    Phi = getPhi(N,len(zbar))
+    
+    #define functions to use when taking derivatives
+    def v_fun(z):
+        V_x,V_rho = envelopeCondition(z,Para)
+        return hstack((V_x.flatten(),V_rho.flatten()))
+    def F(u):
+        z = u[0:len(zbar)]
+        y = u[len(zbar):len(zbar)+len(ybar)]
+        v = u[len(zbar)+len(ybar):]
+        x_i = y[0:N-1].reshape((N-1,1))
+        rho_i = y[N-1:2*(N-1)].T.reshape((N-1,1))
+        V_x = vstack((v[0:N-1],v[2*(N-1):3*(N-1)])).T
+        V_rho = vstack((v[N-1:2*(N-1)],v[3*(N-1):4*(N-1)])).T
+        return FOCResiduals(z,x_i,rho_i,V_x,V_rho,Para)
+    ubar = hstack((zbar,ybar,vbar))
+    HF = zeros((len(zbar),len(ubar),len(ubar)))
+    a_u = ad.independent(ubar)
+    a_F = F(a_u)
+    adF = ad.adfun(a_u,a_F)
+    for i in range(0,len(zbar)):
+        HF[i,:,:] = adF.hessian(ubar,eye(len(zbar))[i,:])
+    
+    F_zz = HF[:,:len(zbar),:len(zbar)]
+    F_zy = HF[:,:len(zbar),len(zbar):len(zbar)+len(ybar)]
+    F_yz = HF[:,len(zbar):len(zbar)+len(ybar),:len(zbar)]
+    
+    a_z = ad.independent(zbar)
+    a_v = v_fun(a_z)
+    advfun = ad.adfun(a_z,a_v)
+    v_zz = zeros((2*(N-1),len(zbar),len(zbar)))
+    for i in range(0,2*(N-1)):
+        v_zz[i,:,:] = advfun.hessian(zbar,eye(2*(N-1))[i,:])
+    
+    return F_zz,F_zy,F_yz,v_zz
+    
+def Order2Lineariazation(Para,x0,rho0):
+    '''
+    Computes the second order linearizationnd the steady state
+    '''
+    N = len(Para.theta)
+    S = len(Para.P)
+    F_z,F_y,F_v,v_z,Phi = getPartialDerivativesFOC_ad(Para,x0,rho0)
+    F_zz,F_zy,F_yz,v_zz = get2ndOrderPartialDerivativesFOC_ad(Para,x0,rho0)
+    eye3d = zeros((2,2,2))
+    eye3d[1,1,1] = 1.
+    eye3d[0,0,0] = 1.
+    def getDz(DyV,DyyV):
+
+        DyprimeV = kron(eye(2),DyV)
+        DyprimeyprimeV = kron(eye3d,DyyV)
+        F_yprimeyprime = tensordot(F_v,DyprimeyprimeV,(1,0))
+        B = linalg.inv(F_z + F_v.dot(DyprimeV).dot(Phi))
+        
+        Dyz = B.dot(-F_y)
+        
+        A = tensordot(tensordot(F_zz,Dyz,(1,0)),Dyz,(1,0))+\
+            tensordot(F_zy,Dyz,(1,0)).transpose((0,2,1))+\
+            tensordot(F_yz,Dyz,(2,0))+\
+            tensordot(tensordot(F_yprimeyprime,Phi.dot(Dyz),(1,0)),Phi.dot(Dyz),(1,0))
+        
+        Dyyz = tensordot(B,-A,(1,0))
+        return Dyz,Dyyz
+    nv = len(v_z)        
+    def MatrixEquation(DVflattened):
+        DyV = DVflattened[:nv**2].reshape((nv,nv))
+        DyyV = DVflattened[nv**2:].reshape((nv,nv,nv))
+        Dyz,Dyyz = getDz(DyV,DyyV)
+        
+        DVflattenedNew = zeros((nv+1)*nv*nv)
+        DVflattenedNew[:nv**2] = v_z.dot(Dyz).flatten()
+        DVflattenedNew[nv**2:] = (tensordot(v_z,Dyyz,(1,0))+tensordot(tensordot(v_zz,Dyz,(1,0)),Dyz,(1,0))).flatten()
+        return DVflattenedNew-DVflattened
+        
+    ny = 2*(N-1)
+    for t in range(0,100):
+        print t
+        DV0 = 0.1*random.randn(ny+1,ny,ny).flatten()
+        sol = root(MatrixEquation,DV0)
+        if sol.success:
+            diff = max(abs(MatrixEquation(sol.x)))
+            DyV = sol.x[:nv**2].reshape((nv,nv))
+            goodRoot = True
+            for i in range(0,nv):
+                if abs(DyV[i,i]) < 1e-6:
+                    goodRoot = False
+            if goodRoot:
+                DVflattened = sol.x
+                print diff
+                break;
+    
+    DyV = DVflattened[:nv**2].reshape((nv,nv))
+    DyyV = DVflattened[nv**2:].reshape((nv,nv,nv))
+    Dyz,Dyyz = getDz(DyV,DyyV)
+        
+    return Dyz,Dyyz,DyV,DyyV,MatrixEquation,getDz
+    
+def simulate2ndOrder(Para,Dyz,Dyyz,T=100,y0=None):
+    '''
+    Simulates the second order process
+    '''
+    N = len(Para.theta)
+    nz = len(Dyz)
+    Phi = getPhi(N,nz)
+    ny = 2*(N-1)
+    B = Phi.dot(Dyz)
+    C = tensordot(Phi,Dyyz,(1,0))
+    B1 = B[ny:,:]
+    B2 = B[:ny,:]
+    C1 = C[ny:,:,:]
+    C2 = C[:ny,:,:]
+
+    yHist = zeros((T,ny))
+    if y0 ==None:
+        yHist[0,:] = 0.1*random.randn(ny)
+    else:
+        yHist[0,:] = y0
+    for t in range(1,T):
+        y0 = yHist[t-1,:]
+        if random.rand() < Para.P[0,0]:
+            yHist[t,:] = B1.dot(y0) + tensordot(tensordot(C1,y0,(1,0)),y0,(1,0)).reshape(-1)
+        else:
+            yHist[t,:] = B2.dot(y0) + tensordot(tensordot(C2,y0,(1,0)),y0,(1,0)).reshape(-1)
+    return yHist
+    
+        
+
+def linearization(Para,x0,rho0):
+    '''
+    Finds and computes the linearization around the steady state
+    '''
+    N = len(Para.theta)
+    DzF,DyF,DvF,Dv,Phi = getPartialDerivativesFOC_ad(Para,x0,rho0)
     '''
     def MatrixEquation(Dyz_flat):
         Dyz = Dyz_flat.reshape((len(zbar),len(ybar)))
@@ -395,28 +600,78 @@ def linearization(Para,x0,rho0):
         Dyz_flat = linalg.solve(M,-DyF.flatten())
         pdb.set_trace()
         return Phi.dot(Dyz_flat.reshape((len(zbar),len(ybar)))).flatten()-Bflat
-    '''    
-    def MatrixEquation(Aflat):
-        A = Aflat.reshape((len(ybar),len(ybar)))
-        M = DzF+DvF.dot(kron(eye(2),A)).dot(Phi)
+    ''' 
+    tiu = triu_indices(2*(N-1))
+    def MatrixEquation(HVpartial):
+        HV = constructHessianSymmetric(HVpartial,N)
+        M = DzF+DvF.dot(kron(eye(2),HV)).dot(Phi)
         Dyz = linalg.solve(M,-DyF)
-        return (Dv.dot(Dyz)).flatten()-Aflat
+        HVnew =Dv.dot(Dyz)
+        return HVnew[tiu]-HVpartial
     diff = 1
-    A = 0
-    for i in range(0,5000):
-        A0 = random.randn(len(ybar)**2)
-        res = root(MatrixEquation,A0)
+    HV = 0
+    for i in range(0,10000):
+        print i
+        HVpartial0 = 0.1*random.randn(len(tiu[0]))
+        res = root(MatrixEquation,HVpartial0,)
         if res.success:
-            if max(abs(MatrixEquation(res.x))) < diff:
-                A = res.x
+            HVtemp =constructHessianSymmetric(res.x,N)
+            goodRoot = max(abs(MatrixEquation(res.x))) < diff
+            for i in range(0,N-1):
+                if abs(HVtemp[i,i])<1e-6:
+                    goodRoot = False
+            if goodRoot:
+                M = DzF+DvF.dot(kron(eye(2),HVtemp)).dot(Phi)
+                Dyz = linalg.solve(M,-DyF)
+                B = Phi.dot(Dyz)
+                Bbar = Para.P[0,0]*B[:2*(N-1),:]+Para.P[0,1]*B[2*(N-1):,:]
+                print linalg.eig(Bbar)[0][0],linalg.eig(Bbar)[1][:,0]
+                HV =constructHessianSymmetric(res.x,N)
                 diff = max(abs(MatrixEquation(res.x)))
                 print diff    
-    M = DzF+DvF.dot(kron(eye(2),A.reshape((len(ybar),len(ybar))))).dot(Phi)
+    M = DzF+DvF.dot(kron(eye(2),HV)).dot(Phi)
     Dyz = linalg.solve(M,-DyF)
 
     H = (DzF +(DvF.dot(kron(eye(2),Dv)).dot(kron(eye(2),Dyz)).dot(Phi)))#Constructs the bordered Hessian
-    return Dyz,H,DzF,DyF,DvF,Dv,MatrixEquation
+    return Dyz,H,DzF,DyF,DvF,Dv,HV,MatrixEquation
     
+def linearization_2agent(Para,x0,rho0):
+    '''
+    Finds and computes the linearization around the steady state
+    '''
+    N = len(Para.theta)
+    DzF,DyF,DvF,Dv,Phi = getPartialDerivativesFOC(Para,x0,rho0)
+
+    def MatrixEquation(HVpartial):
+        HV = constructHessianSymmetric_2agent(HVpartial,N)
+        M = DzF+DvF.dot(kron(eye(2),HV)).dot(Phi)
+        Dyz = linalg.solve(M,-DyF)
+        HVnew =Dv.dot(Dyz)
+        return getHVpartial_2agent(HVnew,N)-HVpartial
+    diff = 1
+    HV = 0
+    for i in range(0,1000):
+        HVpartial0 = 0.2*random.randn(6)
+        res = root(MatrixEquation,HVpartial0,method='lm',tol=1e-14)
+        if res.success:
+            HVtemp =constructHessianSymmetric_2agent(res.x,N)
+            M = DzF+DvF.dot(kron(eye(2),HVtemp)).dot(Phi)
+            Dyz = linalg.solve(M,-DyF)
+            B = Phi.dot(Dyz)
+            Bbar = Para.P[0,0]*B[:2*(N-1),:]+Para.P[0,1]*B[2*(N-1):,:]
+            if max(abs(MatrixEquation(res.x))) < diff  and abs(res.x[0]) >1e-5 :
+                HV =constructHessianSymmetric_2agent(res.x,N)
+                diff = max(abs(MatrixEquation(res.x)))
+                print abs(HV[0,0])
+                print diff    
+    print HV
+    M = DzF+DvF.dot(kron(eye(2),HV)).dot(Phi)
+    Dyz = linalg.solve(M,-DyF)
+
+    H = (DzF +(DvF.dot(kron(eye(2),Dv)).dot(kron(eye(2),Dyz)).dot(Phi)))#Constructs the bordered Hessian
+    return Dyz,H,DzF,DyF,DvF,Dv,HV,MatrixEquation
+    
+
 def Check2ndOrder(Para,x0,rho0):
     '''
     Check the Bordered Hessian 2nd order conition
@@ -574,5 +829,70 @@ def VCM(y,CMzbar):
     alpha_i = Para.alpha[1:]
     U = alpha_1*Para.U(c1,l1)+alpha_i.dot(Para.U(ci,li))
     return P.dot(U)/(1-Para.beta)
+    
+def constructHessianSymmetric(HVpartial,N):
+    '''
+    Constructs the Hessian matrix
+    '''
+    HV = zeros((2*(N-1),2*(N-1)))
+    tiu = triu_indices(2*(N-1))
+    dii = diag_indices(2*(N-1))
+    HV[tiu] = HVpartial
+    HV += HV.T
+    HV[dii] /=2
+    return HV
+    
+def constructHessianSymmetric_2agent(HVpartial,N):
+    '''
+    Constructs the Hessian from a partial sequence assumming 2 agent symmetries
+    HVpartial = [V_xx,V_xx',V_xR,V_xR',V_RR,V_RR']
+    '''
+    HV = zeros((2*(N-1),2*(N-1)))
+    dii = diag_indices(N-1)
+    
+    temp = HVpartial[1]*ones((N-1,N-1))
+    temp[dii] = HVpartial[0]
+    HV[:N-1,:N-1] = temp
+    
+    temp = HVpartial[3]*ones((N-1,N-1))
+    temp[dii] = HVpartial[2]
+    HV[N-1:,:N-1] = temp
+    HV[:N-1,N-1:] = temp
+    
+    temp = HVpartial[5]*ones((N-1,N-1))
+    temp[dii] = HVpartial[4]
+    HV[N-1:,N-1:] = temp
+    return HV
+    
+def getHVpartial_2agent(HV,N):
+    '''
+    Constructs the partial hessian list for two agents
+    '''
+    ret = zeros(6)
+    ret[0] = HV[0,0]
+    ret[1] = HV[0,1]
+    ret[2] = HV[0,N-1]
+    ret[3] = HV[0,N]
+    ret[4] = HV[N-1,N-1]
+    ret[5] = HV[N-1,N]
+    return ret
+    
+def varianceEigenvalues(B,Para):
+    '''
+    Computes the eigenvalues of the variance map
+    '''
+    N = len(Para.theta)
+    B1 = B[:2*(N-1),:]
+    B2 = B[2*(N-1),:]
+    P = Para.P[0,:]
+    def fSigma(Sigma):
+        Sigma = Sigma.reshape((2*(N-1),2*(N-1)))
+        return (P[0]*B1.dot(Sigma).dot(B1.T) +P[1]*B2.dot(Sigma).dot(B2.T)).flatten()
+        
+    IS = eye(4*(N-1)**2)
+    M = zeros(IS.shape)
+    for i in range(0,len(IS)):
+        M[:,i] = fSigma(IS[i,:])
+    return linalg.eig(M)[0]        
 
     

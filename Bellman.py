@@ -116,6 +116,7 @@ class BellmanMap:
                     self.policies[state] = ConSol.policies
                     return ConSol.policies
             # if everything failed return None to indicate failer
+            raise Exception('Maximization Failed')
             return None
         else:
             #first try unconstrained maximization
@@ -138,6 +139,7 @@ class BellmanMap:
                     self.policies[state] = ConSol.policies
                     return ConSol.policies
             # if everything failed return None to indicate failer
+            raise Exception('Maximization Failed')
             return None
         
         
@@ -206,7 +208,7 @@ class BellmanMap:
         bounds = cbounds
         #perfom minimization
         policy,minusV,_,imode,smode = fmin_slsqp(self.io.ConstrainedObjective,z0,f_ieqcons=self.io.ieq_cons,eqcons=[self.io.eq_con],bounds=bounds,
-                   fprime_eqcons=self.io.eq_conJacobian,fprime_ieqcons=self.io.ieq_consJacobian,args=(x,R,s_,self.Vf,Para),iter=1000,
+                   fprime_eqcons=self.io.eq_conJacobian,fprime_ieqcons=self.io.ieq_consJacobian,args=(x,R,s_,self.Vf,Para),iter=5000,
                     acc=1e-12,disp=0,full_output=True)
         
         policies = self.getPolicies(policy[0:S],policy[S:2*S-1],x,R,s_)
@@ -270,7 +272,7 @@ class BellmanMap:
         bounds = cbounds
         #perfom minimization
         policy,minusV,_,imode,smode = fmin_slsqp(self.ioEdge.ConstrainedObjective,z0,f_ieqcons=self.ioEdge.ieq_cons,bounds=bounds,
-                   fprime_ieqcons=self.ioEdge.ieq_consJacobian,args=(x,R,s_,self.Vf,Para),iter=1000,
+                   fprime_ieqcons=self.ioEdge.ieq_consJacobian,args=(x,R,s_,self.Vf,Para),iter=5000,
                     acc=1e-12,disp=0,full_output=True)
         
         policies = self.getPoliciesEdge(policy[0:S],x,R,s_)
@@ -383,7 +385,7 @@ def solveBellmanMPI(Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy,Para):
         #if diff > 2*diff_old and t >50:
         #    return Vf,Vf_old,Vfprime,c1_policy,c2_policy,Rprime_policy,xprime_policy
         Vf= Vfprime
-        if diff < 1e-8:
+        if diff < 9e-7:
             break
     return Vf,c1_policy,c2_policy,Rprime_policy,xprime_policy
 

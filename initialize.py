@@ -72,6 +72,56 @@ def completeMarketsSolution(state,Para):
     return c1,c2,xprime,V
     
     
+def firstBestSolution(state,Para):
+    '''
+    Solves for first best given the R constraint
+    '''
+    x,R,s_ = state
+    S = Para.P.shape[0]
+    U = Para.U
+    Uc = Para.Uc
+    Ul = Para.Ul
+    def FBResiduals(z):
+        c1 = z[0:S]
+        c2 = z[S:2*S]
+        l1 = z[2*S:3*S]
+        l2 = z[3*S:4*S]
+        xi = z[4*S:5*S]
+        rho = z[5*S:6*S]
+        g = Para.g
+        Uc = Para.Uc
+        Ul = Para.Ul
+        Ucc = Para.Uc
+        n1 = Para.n1
+        n2 = Para.n2
+        alpha_1 =Para.alpha_1
+        alpha_2 = Para.alpha_2
+        theta_1 = Para.theta_1
+        theta_2 = Para.theta_2
+        uc1,ucc1,ul1 = Uc(c1),Ucc(c1),Ul(l1)
+        uc2,ucc2,ul2 = Uc(c2),Ucc(c2),Ul(l2)
+        res = np.zeros(6*S)
+        res[:S] = n1*l1*theta_1+n2*l2*theta_2 - n1*c1-n2*c2-g
+        res[S:2*S] = R*uc1-uc2
+        res[2*S:3*S] = alpha_1*uc1 -n1*xi + ucc1*R*rho
+        res[3*S:4*S] = alpha_2*uc2 - n2*xi - ucc2*rho
+        res[4*S:5*S] = alpha_1*ul1  + n1*theta_1*xi
+        res[5*S:6*S] = alpha_2*ul2 + n2*theta_2*xi
+        return res
+    z0 = np.hstack((0.5*np.ones(4*S),np.zeros(2*S)))
+    zFB = root(FBResiduals,z0).x
+    c1 = zFB[0:S]
+    c2 = zFB[S:2*S]
+    l1 = zFB[2*S:3*S]
+    l2 = zFB[3*S:4*S]
+    uc1,ul1 = Uc(c1),Ul(l1)
+    uc2,ul2 = Uc(c2),Ul(l2)
+    Euc2 = Para.P.dot(uc2)[s_]
+    xprime = (x*uc2/Euc2+R*(uc1*c1+ul1*l1)-uc2*c2-ul2*l2)/Para.beta
+    u = Para.alpha_1*U(c1,l1)+Para.alpha_2*U(c2,l2)
+    V = Para.P[s_,:].dot(np.linalg.solve(np.eye(S)-(Para.beta*Para.P.T).T,u))
+    return c1,c2,xprime,V
+    
     
     
     

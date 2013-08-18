@@ -25,6 +25,8 @@ class parameters(object):
     
     P = array([0.5,0.5])
     
+    beta = 0.9
+    
     
 Para= parameters()
 
@@ -169,7 +171,7 @@ def getU(tau,R,Para):
     gamma = Para.gamma
     sigma = Para.sigma
     c1,c2,l1,l2 = getQuantities(tau,R,Para)
-    return Para.alpha_2*(c2**(1-sigma)/(1-sigma)-l2**(1+gamma)/(1+gamma)) + Para.alpha_2*(c1**(1-sigma)/(1-sigma)-l1**(1+gamma)/(1+gamma))
+    return Para.alpha_2*(c2**(1-sigma)/(1-sigma)-l2**(1+gamma)/(1+gamma)) + Para.alpha_1*(c1**(1-sigma)/(1-sigma)-l1**(1+gamma)/(1+gamma))
     
     
 def dUdtau(tau,R,Para):
@@ -181,7 +183,7 @@ def dUdtau(tau,R,Para):
     sigma = Para.sigma
     c1,c2,l1,l2 = getQuantities(tau,R,Para)
     dc1,dc2,dl1,dl2 = Dtau(tau,R,Para)
-    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_2*(c1**(-sigma)*dc1-l1**gamma*dl1)
+    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_1*(c1**(-sigma)*dc1-l1**gamma*dl1)
     
 def dUdR(tau,R,Para):
     '''
@@ -192,4 +194,40 @@ def dUdR(tau,R,Para):
     sigma = Para.sigma
     c1,c2,l1,l2 = getQuantities(tau,R,Para)
     dc1,dc2,dl1,dl2 = DR(tau,R,Para)
-    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_2*(c1**(-sigma)*dc1-l1**gamma*dl1)
+    return Para.alpha_2*(c2**(-sigma)*dc2-l2**gamma*dl2)+Para.alpha_1*(c1**(-sigma)*dc1-l1**gamma*dl1)
+    
+def mu(tau,R,Para):
+    return dUdtau(tau,R,Para)/dIdtau(tau,R,Para)
+    
+def Rcon(tau,R,Para):
+    '''
+    Computes Rcon constraint
+    '''
+    mu_ = mu(tau,R,Para)
+    dUdR_ = dUdR(tau,R,Para)
+    dIdR_ = dIdR(tau,R,Para)
+    Uc1 = getUc1(tau,R,Para)
+    
+    P = Para.P
+    beta = Para.beta
+    
+    num = mu_*(dIdR_+beta*P.dot(dIdR_)/(1-beta)) - (dUdR_+beta*P.dot(dUdR_)/(1-beta))
+    return num/Uc1
+    
+def getTau(R,Para):
+    '''
+    Compute tau to solve the bond constraint
+    '''
+    f = lambda tau: Rcon(tau,R,Para)
+    return root(f,0.2).x
+    
+def SSfun(R,Para):
+    '''
+    Function the residual of which is the steady state
+    '''
+    tau = getTau(R,Para)
+    I = getI(tau,R,Para)
+    uc1 = getUc1(tau,R,Para)
+    Euc1 = Para.P.dot(uc1)
+    x = I/(uc1/Euc1-Para.beta)
+    return x
