@@ -818,17 +818,19 @@ def SSz_to_CMz(z,Para):
     
     return hstack((c1,ci.flatten(),l1,li.flatten(),mu_i.flatten(),mult)),x_i,rho_i
     
-def VCM(y,CMzbar):
+def VCM(y,CMzbar,Para):
     N = len(Para.theta)
     x = y[0:N-1].reshape((-1,1))
     rho = y[N-1:].reshape((-1,1))
-    CMz = root(lambda z: CMResiduals(z,x,rho,Para),CMzbar).x
+    sol = root(lambda z: CMResiduals(z,x,rho,Para),CMzbar)
+    CMz = sol.x
     c1,ci,l1,li,mu_i,xi,phi_i,eta_i = getCMQuantities(CMz,Para)
     P = Para.P[0,:]
     alpha_1 = Para.alpha[0]
     alpha_i = Para.alpha[1:]
     U = alpha_1*Para.U(c1,l1)+alpha_i.dot(Para.U(ci,li))
-    return P.dot(U)/(1-Para.beta)
+    return hstack((P.dot(U)/(1-Para.beta),c1,ci.flatten())),sol.success
+ 
     
 def constructHessianSymmetric(HVpartial,N):
     '''
