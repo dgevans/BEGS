@@ -218,7 +218,7 @@ def FOCResiduals(z,mu_i,rho_i,xprime,V_rho,Para):
     foc = alpha_i*uli -muprime*( ulli*li+uli ) - phi_i*ulli/theta_i + n_i*theta_i*xi
     res = hstack((res,foc.flatten()))
 
-    foc = Emu_uci-mu_i
+    foc = Emu_uci/Euci-mu_i
     res = hstack((res,foc.flatten()))    
     
     foc = beta*V_rho + muprime*(uc1*c1+ul1*l1) + phi_i*ul1/theta_1 + lambda_i*uci + eta_i*uc1
