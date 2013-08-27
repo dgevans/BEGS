@@ -389,6 +389,53 @@ def getPartialDerivativesFOC(Para,x0,rho0):
     Dv = nd.Jacobian(w_fun)(zbar)
     
     return DzF,DyF,DvF,Dv,Phi
+    
+def getPartialDerivativesFOC_ad(Para,x0,rho0):
+    '''
+    Compute the partial derivatives of the FOC map and Envelope conditions
+    '''    
+    N = len(Para.theta)
+    S = len(Para.P)
+    
+    assert S==2    
+    
+    SSz = findSteadyState(Para,x0,rho0)
+    _,_,_,_,x_i,rho_i,mu_i,_,_,_,_ = getSSQuantities(SSz,Para)
+    zbar = SSz_to_FOCz(SSz,Para)
+    ybar = hstack((mu_i.flatten(),rho_i.flatten()))
+    V_rho = envelopeCondition(zbar,Para)
+    wbar = tile(hstack((x_i.flatten(),V_rho.flatten())),2)
+    Phi = getPhi(N,len(zbar))
+    
+    #define functions to use when taking derivatives
+    def w_fun(z):
+        x_i = z[2*N*S:2*N*S+(N-1)]
+        V_rho = envelopeCondition(z,Para)
+        return hstack((x_i,V_rho.flatten()))
+    def F(u):
+        z = u[0:len(zbar)]
+        y = u[len(zbar):len(zbar)+len(ybar)]
+        w = u[len(zbar)+len(ybar):]
+        mu_i = y[0:N-1].reshape((N-1,1))
+        rho_i = y[N-1:2*(N-1)].T.reshape((N-1,1))
+        xprime = vstack((w[0:N-1],w[2*(N-1):3*(N-1)])).T
+        V_rho = vstack((w[N-1:2*(N-1)],w[3*(N-1):4*(N-1)])).T
+        return FOCResiduals(z,mu_i,rho_i,xprime,V_rho,Para)
+    ubar = hstack((zbar,ybar,wbar))
+    a_u = ad.independent(ubar)
+    a_F = F(a_u)
+    adF = ad.adfun(a_u,a_F)
+    
+    DF = adF.jacobian(ubar)
+    
+    F_z = DF[:,:len(zbar)]
+    F_y = DF[:,len(zbar):len(zbar)+len(ybar)]
+    F_w = DF[:,len(zbar)+len(ybar):]
+    
+    a_z = ad.independent(zbar)
+    a_w = w_fun(a_z)
+    w_z = ad.adfun(a_z,a_w).jacobian(zbar)
+    return F_z,F_y,F_w,w_z,Phi
  
 
 def linearization(Para,x0,rho0):
@@ -396,7 +443,7 @@ def linearization(Para,x0,rho0):
     Finds and computes the linearization around the steady state
     '''
     N = len(Para.theta)
-    DzF,DyF,DvF,Dv,Phi = getPartialDerivativesFOC(Para,x0,rho0)
+    DzF,DyF,DvF,Dv,Phi = getPartialDerivativesFOC_ad(Para,x0,rho0)
     '''
     def MatrixEquation(Dyz_flat):
         Dyz = Dyz_flat.reshape((len(zbar),len(ybar)))
@@ -425,7 +472,7 @@ def linearization(Para,x0,rho0):
     HV = 0
     for i in range(0,100):
         HV0 = 0.1*random.randn(4*(N-1)**2)
-        res = root(MatrixEquation,HV0)
+        res = root(MatrixEquation,HV0,tol=1e-14)
         if res.success:
             HVtemp = res.x.reshape((2*(N-1),2*(N-1)))
             diffnew = max(abs(MatrixEquation(res.x)))
